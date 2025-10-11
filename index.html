@@ -1,0 +1,1177 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width,initial-scale=1" name="viewport"/>
+    <title>איתור מספרי טלפון</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #111827;
+            --muted: #94a3b8;
+            --accent: #22d3ee;
+            --border: #1f2937;
+            --text: #e5e7eb;
+            --ok: #10b981;
+            --err: #ef4444;
+            --warn: #f59e0b;
+            --backdrop: rgba(0, 0, 0, 0.6);
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, Arial;
+            background: var(--bg);
+            color: var(--text)
+        }
+
+        header {
+            padding: 28px 20px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+
+        header h1 {
+            margin: 0 0 6px;
+            font-size: 28px
+        }
+
+        header p {
+            margin: 0;
+            color: var(--muted)
+        }
+
+        .container {
+            max-width: 1150px;
+            margin: 24px auto;
+            padding: 0 16px
+        }
+
+        .panel {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 18px;
+            margin-bottom: 18px
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center
+        }
+
+        label {
+            color: var(--muted);
+            font-size: 14px
+        }
+
+        input, textarea, button {
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #0b1220;
+            color: var(--text);
+            font-size: 16px;
+        }
+
+        input::placeholder, textarea::placeholder {
+            color: #64748b
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 110px;
+            resize: vertical
+        }
+
+        button {
+            background: linear-gradient(180deg, #06b6d4, #0891b2);
+            border: none;
+            cursor: pointer
+        }
+
+        button.secondary {
+            background: #0b1220;
+            border: 1px solid var(--border)
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        .chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px
+        }
+
+        .chip {
+            background: #0b1220;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 14px;
+            display: flex;
+            gap: 8px;
+            align-items: center
+        }
+
+        .chip .remove {
+            color: #fca5a5;
+            cursor: pointer
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px
+        }
+
+        th, td {
+            border: 1px solid var(--border);
+            padding: 10px;
+            text-align: right;
+            vertical-align: top
+        }
+
+        th {
+            background: #0b1626;
+            position: sticky;
+            top: 0
+        }
+
+        a {
+            color: #7dd3fc;
+            text-decoration: underline
+        }
+
+        .status-ok {
+            color: #10b981;
+            font-weight: 600
+        }
+
+        .status-error {
+            color: #ef4444;
+            font-weight: 600
+        }
+
+        .status-invalid {
+            color: #f59e0b;
+            font-weight: 600
+        }
+
+        /* === Toasts === */
+        .toasts {
+            position: fixed;
+            inset-inline-end: 16px;
+            inset-block-end: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 2000;
+            pointer-events: none;
+        }
+
+        .toast {
+            min-width: 280px;
+            max-width: min(520px, 90vw);
+            background: #0b1220;
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 14px;
+            padding: 12px 14px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+            animation: slideIn 180ms ease-out;
+            pointer-events: auto;
+        }
+
+        .toast .title {
+            font-weight: 600;
+            margin: 0 0 6px;
+            font-size: 15px
+        }
+
+        .toast .msg {
+            margin: 0;
+            color: var(--muted);
+            font-size: 14px
+        }
+
+        .toast .tags {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px
+        }
+
+        .toast .tag {
+            font-size: 12px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 3px 8px;
+            background: #0e172a
+        }
+
+        .toast .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px
+        }
+
+        .toast .close {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 6px 8px;
+            cursor: pointer
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(8px);
+                opacity: 0
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1
+            }
+        }
+
+        /* Modal כללי (נשאר) */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: var(--backdrop);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1500;
+        }
+
+        .modal-backdrop.show {
+            display: flex;
+        }
+
+        .modal {
+            width: min(680px, 92vw);
+            background: #0b1220;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+
+        .modal header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .modal header h3 {
+            margin: 0;
+            font-size: 18px
+        }
+
+        .modal .body {
+            padding: 14px 16px;
+            max-height: 55vh;
+            overflow: auto;
+            line-height: 1.6
+        }
+
+        .modal .footer {
+            padding: 14px 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-start;
+            gap: 8px
+        }
+
+        .close-btn {
+            background: #0b1220;
+            border: 1px solid var(--border);
+            padding: 8px 12px;
+            border-radius: 10px;
+            cursor: pointer
+        }
+
+        .accept-btn {
+            background: linear-gradient(180deg, #06b6d4, #0891b2);
+            border: none;
+            padding: 10px 14px;
+            border-radius: 10px;
+            cursor: pointer
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<header>
+    <h1>איתור מספרי טלפון</h1>
+</header>
+
+<div class="container">
+
+    <!-- API Base + Health -->
+    <div class="panel">
+        <div class="row">
+            <label>API Base</label>
+            <input id="apiBase" style="min-width:280px" value="http://localhost:8001"/>
+            <button id="btnHealth">בדיקת חיבור</button>
+            <span class="muted" id="health"></span>
+        </div>
+    </div>
+
+    <!-- IMPORT -->
+    <div class="panel">
+        <h3 style="margin:0 0 8px">ייבוא קובץ (CSV / XLSX)</h3>
+        <div class="row">
+            <input accept=".csv,.xlsx,.xls" id="fileInput" type="file"/>
+            <button class="secondary" id="btnDownloadSample">הורד קובץ דוגמה (CSV)</button>
+        </div>
+        <div class="muted" id="importReport" style="margin-top:8px"></div>
+    </div>
+
+    <!-- MANUAL -->
+    <div class="panel">
+        <h3 style="margin:0 0 8px">הוספת מספרים ידנית</h3>
+        <label style="display:block; margin-bottom:8px;">הוספר מספר בודד:</label>
+        <div class="row">
+            <input id="singleNum" placeholder="לדוגמה: 0525123123" style="flex:1"/>
+            <button id="btnAdd">➕ הוסף</button>
+        </div>
+
+        <div style="margin-top:12px">
+            <label style="display:block; margin-bottom:8px;">הוספה מספר של מספרים (הפרדה באמצעות
+                שורות/פסיקים/נקודה־פסיק):</label>
+            <textarea id="bulkPaste" placeholder="+972525..., 0525123123; 03-7771234
+0501234567"></textarea>
+            <div class="row" style="margin-top:8px">
+                <button class="secondary" id="btnClearAll">נקה הכל</button>
+                <span class="muted">כל שינוי בתיבה מסנכרן את הכרטיסיות ולהיפך.</span>
+            </div>
+            <div class="muted" id="liveReport" style="margin-top:6px"></div>
+        </div>
+
+        <div class="chips" id="chips"></div>
+    </div>
+
+    <!-- RUN + OPTIONS -->
+    <div class="panel">
+        <div class="row">
+            <label>Delay (ms)</label>
+            <input id="delayMs" max="10000" min="0" style="width:120px" type="number" value="1"/>
+            <label>חלון תשובות (שניות)</label>
+            <input id="windowSec" max="15" min="0" style="width:100px" type="number" value="1"/>
+            <button id="btnRun">אתר</button>
+            <!-- יוצג רק אם יש נכשלים -->
+            <button class="secondary" id="btnRetryFailed" style="display:none">שלח שוב נכשלים</button>
+        </div>
+    </div>
+
+    <!-- RESULTS -->
+    <!-- RESULTS -->
+    <div class="panel">
+        <h3 style="margin:0 0 8px">תוצאות</h3>
+        <div class="row">
+            <button class="secondary" id="btnCopyTable" style="display:none">העתק טבלה</button>
+            <button class="secondary" id="btnExportExcel" style="display:none">ייצא Excel</button>
+            <button class="secondary" id="btnClearResults" style="display:none">נקה תוצאות</button>
+        </div>
+        <div id="resultsArea" style="max-height:60vh; overflow:auto; margin-top:10px"></div>
+    </div>
+
+
+</div>
+
+<!-- Toast container -->
+<div class="toasts" id="toasts"></div>
+
+<!-- Modal כללי -->
+<div aria-labelledby="modalTitle" aria-modal="true" class="modal-backdrop" id="modalBackdrop" role="dialog">
+    <div class="modal">
+        <header>
+            <h3 id="modalTitle">הודעה</h3>
+            <button aria-label="סגור" class="close-btn" id="modalCloseBtn">סגור</button>
+        </header>
+        <div class="body">
+            <p class="muted" id="modalMsg" style="margin-top:0"></p>
+        </div>
+        <div class="footer">
+            <button class="accept-btn" id="modalOkBtn">הבנתי</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function el(id) {
+        return document.getElementById(id);
+    }
+
+    /* ========= מקור אמת: סט + סדר ========= */
+    let numbersOrder = [];
+    const numbersSet = new Set();
+    const SEP_WRITE = "\n";
+
+    /* ========= Toasts ========= */
+    function showToast({title = "", message = "", tags = [], timeout = 4000}) {
+        const wrap = el("toasts");
+        const node = document.createElement("div");
+        node.className = "toast";
+        node.innerHTML = `
+    <div class="row">
+      <div class="title">${title}</div>
+      <button class="close" aria-label="סגור">סגור</button>
+    </div>
+    <p class="msg">${message}</p>
+    <div class="tags"></div>
+  `;
+        const tagsWrap = node.querySelector(".tags");
+        const MAX_TAGS = 8;
+        const over = Math.max(0, tags.length - MAX_TAGS);
+        (tags.slice(0, MAX_TAGS)).forEach(t => {
+            const span = document.createElement("span");
+            span.className = "tag";
+            span.textContent = t;
+            tagsWrap.appendChild(span);
+        });
+        if (over > 0) {
+            const more = document.createElement("span");
+            more.className = "tag";
+            more.textContent = `+${over} נוספים`;
+            tagsWrap.appendChild(more);
+        }
+        const closeBtn = node.querySelector(".close");
+        const remove = () => {
+            if (node.parentNode) {
+                node.parentNode.removeChild(node);
+            }
+        };
+        closeBtn.addEventListener("click", remove);
+        wrap.appendChild(node);
+        if (timeout > 0) {
+            setTimeout(remove, timeout);
+        }
+    }
+
+    /* ========= עזרי ניהול ========= */
+    function addNumber(raw) {
+        const n = (raw || "").trim();
+        if (!n) return false;
+        if (!numbersSet.has(n)) {
+            numbersSet.add(n);
+            numbersOrder.push(n);
+            return true;
+        }
+        return false;
+    }
+
+    function removeNumber(raw) {
+        if (numbersSet.has(raw)) {
+            numbersSet.delete(raw);
+            numbersOrder = numbersOrder.filter(x => x !== raw);
+        }
+    }
+
+    function resetNumbers() {
+        numbersSet.clear();
+        numbersOrder = [];
+    }
+
+    function cleanDigits(s) {
+        return (s || "").replace(/[ \-\.\(\)\/]/g, "");
+    }
+
+    function looksLikePhoneRaw(raw) {
+        const s = cleanDigits(raw);
+        if (!s) return false;
+        if (s.startsWith("+") && /^\+\d{9,15}$/.test(s)) return true;
+        if (/^05\d{8}$/.test(s)) return true;
+        if (/^0\d{8,9}$/.test(s)) return true;
+        if (/^\d{9}$/.test(s) && s.startsWith("5")) return true;
+        if (/^972\d{8,9}$/.test(s)) return true;
+        return false;
+    }
+
+    function normalizeForSend(raw) {
+        let s = cleanDigits(raw);
+        if (s.startsWith("+")) return s;
+        if (s.startsWith("972")) return "+" + s;
+        if (/^05\d{8}$/.test(s)) return "+972" + s.slice(1);
+        if (/^0\d{8,9}$/.test(s)) return "+972" + s.slice(1);
+        if (/^\d{9}$/.test(s) && s.startsWith("5")) return "+972" + s;
+        return s;
+    }
+
+    /* ========= פירוק/איחוד ========= */
+    function splitTokens(raw) {
+        return (raw || "").split(/[\n,;]+/g).map(x => x.trim()).filter(x => x.length > 0);
+    }
+
+    function serializeNumbers() {
+        return numbersOrder.join(SEP_WRITE);
+    }
+
+    /* ========= רינדור ========= */
+    function renderChips() {
+        const wrap = el("chips");
+        wrap.innerHTML = "";
+        if (numbersOrder.length === 0) {
+            wrap.innerHTML = `<span class="muted">לא הוזנו מספרים עדיין.</span>`;
+            return;
+        }
+        numbersOrder.forEach(n => {
+            const chip = document.createElement("div");
+            chip.className = "chip";
+            chip.innerHTML = `<span>${n}</span> <span class="remove" title="הסר">✕</span>`;
+            chip.querySelector(".remove").onclick = () => {
+                removeNumber(n);
+                syncTextareaFromState();
+                renderChips();
+                updateLiveReport();
+            };
+            wrap.appendChild(chip);
+        });
+    }
+
+    /* ========= דו"ח לא תקינים ========= */
+    function updateLiveReport(invalidList = []) {
+        const r = el("liveReport");
+        if (!invalidList || invalidList.length === 0) {
+            r.textContent = "";
+            return;
+        }
+        r.innerHTML = `התעלמנו מ־<b>${invalidList.length}</b> ערכים לא תקינים (דוגמה: ${invalidList.slice(0, 3).join(", ")}).`;
+    }
+
+    /* --- תצוגה יפה ל־IL --- */
+    function displayFromIntlKey(key) {
+        if (/^(\+)?972\d{8,9}$/.test(key.replace(/\s/g, ""))) {
+            const digits = key.replace(/[^\d]/g, "").replace(/^972/, "");
+            const national = digits;
+            return national.startsWith("0") ? national : ("0" + national);
+        }
+        return key;
+    }
+
+    /* ========= כפילויות: עזר ו-TOAST ========= */
+    function analyzeCandidates(candidates) {
+        const existingKeys = new Set((numbersOrder || []).map(raw => normalizeForSend(raw)));
+        const seenInBatch = new Set();
+        const dupKeys = new Set();
+        const uniquesRaw = [];
+        const invalid = [];
+
+        for (const raw0 of (candidates || []).map(s => s.trim()).filter(Boolean)) {
+            if (!looksLikePhoneRaw(raw0)) {
+                invalid.push(raw0);
+                continue;
+            }
+            const key = normalizeForSend(raw0);
+            if (existingKeys.has(key) || seenInBatch.has(key)) {
+                dupKeys.add(key);
+                continue;
+            }
+            uniquesRaw.push(raw0);
+            seenInBatch.add(key);
+        }
+        return {uniquesRaw, dupKeys, invalid};
+    }
+
+    function toastDupKeys(dupKeys, title = "נמצאו כפילויות") {
+        if (!dupKeys || dupKeys.size === 0) return;
+        const tags = Array.from(dupKeys).map(displayFromIntlKey);
+        showToast({
+            title,
+            message: `כפילויות עבור ${dupKeys.size} מספרים—נוקו אוטומטית.`,
+            tags
+        });
+    }
+
+    /* ========= Modal כללי ========= */
+    function openModal({title, message}) {
+        el("modalTitle").textContent = title || "הודעה";
+        el("modalMsg").textContent = message || "";
+        el("modalBackdrop").classList.add("show");
+        el("modalOkBtn").focus();
+    }
+
+    function closeModal() {
+        el("modalBackdrop").classList.remove("show");
+    }
+
+    el("modalOkBtn").addEventListener("click", closeModal);
+    el("modalCloseBtn").addEventListener("click", closeModal);
+    el("modalBackdrop").addEventListener("click", (e) => {
+        if (e.target === e.currentTarget) closeModal();
+    });
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
+    });
+
+    /* ========= דדופ + טוסט כללי ========= */
+    function dedupeByIntlKeyToast() {
+        if (!numbersOrder.length) return false;
+        const seen = new Map();
+        const dupKeys = new Set();
+
+        for (const raw of numbersOrder) {
+            const key = normalizeForSend(raw);
+            if (!seen.has(key)) seen.set(key, raw);
+            else dupKeys.add(key);
+        }
+        const dupKeysArr = Array.from(dupKeys);
+        if (dupKeysArr.length === 0) return false;
+
+        const newOrder = [];
+        const newSet = new Set();
+        for (const [key, firstRaw] of seen.entries()) {
+            if (!newSet.has(firstRaw)) {
+                newSet.add(firstRaw);
+                newOrder.push(firstRaw);
+            }
+        }
+        numbersOrder = newOrder;
+        numbersSet.clear();
+        newOrder.forEach(x => numbersSet.add(x));
+        syncTextareaFromState();
+        renderChips();
+
+        toastDupKeys(dupKeys, "נמצאו כפילויות");
+        return true;
+    }
+
+    /* ========= סנכרון טקסט ⇄ מצב ========= */
+    function syncTextareaFromState() {
+        el("bulkPaste").value = serializeNumbers();
+    }
+
+    function syncStateFromTextarea() {
+        const tokens = splitTokens(el("bulkPaste").value);
+
+        const seenInBatch = new Set();
+        const dupKeys = new Set();
+        const nextOrder = [];
+        const nextSet = new Set();
+        const invalid = [];
+
+        for (const t of tokens) {
+            if (!looksLikePhoneRaw(t)) {
+                invalid.push(t);
+                continue;
+            }
+            const key = normalizeForSend(t);
+            if (seenInBatch.has(key)) {
+                dupKeys.add(key);
+                continue;
+            }
+            if (!nextSet.has(t)) {
+                nextSet.add(t);
+                nextOrder.push(t);
+            }
+            seenInBatch.add(key);
+        }
+
+        numbersOrder = nextOrder;
+        numbersSet.clear();
+        nextOrder.forEach(x => numbersSet.add(x));
+
+        if (dupKeys.size > 0) {
+            syncTextareaFromState();
+            toastDupKeys(dupKeys, "כפילויות בעריכה/הדבקה");
+        }
+
+        renderChips();
+        updateLiveReport(invalid);
+    }
+
+    /* ========= טבלת תוצאות ========= */
+    function pickBestReply(replies) {
+        if (!replies || !replies.length) return "";
+        for (let i = replies.length - 1; i >= 0; i--) {
+            const t = (replies[i] || "").trim();
+            if (t) return t;
+        }
+        return replies[0] || "";
+    }
+
+    function parseReply(text) {
+        const t = (text || "").replaceAll(/\*\*/g, "").replaceAll(/`/g, "").trim();
+        const get = (re, g = 1) => {
+            const m = re.exec(t);
+            return m ? m[g].trim() : "";
+        };
+        const number = get(/Number:\s*\*?\+?(\d[\d+]*)/i) || get(/Number:\s*([+]\d[\d\s-]+)/i);
+        const country = get(/Country:\s*([^\n*]+)/i);
+        const tcName = get(/TrueCaller Says:.*?Name:\s*([^\n*]+)/is) || get(/Name:\s*([^\n*]+)/i);
+        const carrier = get(/Carrier:\s*([^\n*]+)/i);
+        const unkName = get(/Unknown Says:.*?Name:\s*([^\n*]+)/is);
+        const email = get(/Email:\s*([^\s\n<>]+)/i);
+        const wa = get(/\[?WhatsApp\]?\s*\((https?:\/\/[^\s)]+)\)/i) || get(/(https?:\/\/wa\.me\/[^\s)]+)/i);
+        const tg = get(/\[?Telegram\]?\s*\((https?:\/\/[^\s)]+)\)/i) || get(/(https?:\/\/t\.me\/[^\s)]+)/i);
+        return {
+            number: number || "",
+            country: (country || "").replace(/[🇦-🇿\u{1F1E6}-\u{1F1FF}]/gu, "").trim(),
+            truecaller_name: (tcName || "").trim(),
+            carrier: (carrier || "").trim(),
+            unknown_name: (unkName || "").trim(),
+            email: (email || "").trim(),
+            whatsapp: wa || "",
+            telegram: tg || ""
+        };
+    }
+
+    function splitIntl(intl) {
+        const s = (intl || "").replace(/\s/g, "");
+        let prefix = "", national = intl || "";
+        let m = s.match(/^\+(\d{1,3})(\d+)$/);
+        if (m) {
+            prefix = "+" + m[1];
+            national = m[2];
+        } else {
+            m = s.match(/^972(\d{8,9})$/);
+            if (m) {
+                prefix = "+972";
+                national = m[1];
+            } else {
+                national = s.replace(/^\+/, "");
+                prefix = "";
+            }
+        }
+        return {prefix, national};
+    }
+
+    function formatNationalForDisplay(prefix, national, country) {
+        const isIL = (prefix === "+972") || (/israel/i.test(country || ""));
+        if (!isIL) return national || "";
+        const n = national || "";
+        return n.startsWith("0") ? n : ("0" + n);
+    }
+
+    function rowsFromBatch(results) {
+        return results.map(r => {
+            const obj = {
+                status: r.status || "",
+                number: "",
+                prefix: "",
+                country: "",
+                truecaller_name: "", carrier: "", unknown_name: "",
+                email: "", whatsapp: "", telegram: ""
+            };
+            const best = r.status === "ok" ? pickBestReply(r.replies || []) : "";
+            const p = r.status === "ok" ? parseReply(best) : null;
+            const intlNumber = (p && p.number) ? p.number : (r.query || "");
+            const parts = splitIntl(intlNumber);
+            const country = (p && p.country) || "";
+
+            obj.country = country;
+            obj.prefix = parts.prefix ? (country ? `${parts.prefix} (${country})` : parts.prefix) : "";
+            obj.number = formatNationalForDisplay(parts.prefix, parts.national, country) || (r.query || "");
+
+            if (p) {
+                obj.truecaller_name = p.truecaller_name;
+                obj.carrier = p.carrier;
+                obj.unknown_name = p.unknown_name;
+                obj.email = p.email;
+                obj.whatsapp = p.whatsapp;
+                obj.telegram = p.telegram;
+            }
+            return obj;
+        });
+    }
+
+    function renderTable(rows) {
+        const wrap = el("resultsArea");
+        if (!rows.length) {
+            wrap.innerHTML = `<div class="muted">אין תוצאות</div>`;
+            return;
+        }
+        const thead = `
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Status</th>
+        <th>Prefix</th>
+        <th>Number</th>
+        <th>Country</th>
+        <th>TrueCaller Name</th>
+        <th>Carrier</th>
+        <th>Unknown Name</th>
+        <th>Email</th>
+        <th>WhatsApp</th>
+        <th>Telegram</th>
+      </tr>
+    </thead>`;
+        const esc = s => (s || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+        const mkEmail = e => e ? `<a href="mailto:${encodeURIComponent(e)}">${esc(e)}</a>` : "";
+        const mkLink = (u, label) => u ? `<a href="${u}" target="_blank" rel="noopener">${label || u}</a>` : "";
+        const statusCell = s => s === "ok" ? `<span class="status-ok">OK</span>` :
+            s === "invalid" ? `<span class="status-invalid">Invalid</span>` :
+                s === "error" ? `<span class="status-error">Error</span>` : esc(s || "");
+        const tbody = rows.map((r, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${statusCell(r.status)}</td>
+      <td>${esc(r.prefix)}</td>
+      <td>${esc(r.number)}</td>
+      <td>${esc(r.country)}</td>
+      <td>${esc(r.truecaller_name)}</td>
+      <td>${esc(r.carrier)}</td>
+      <td>${esc(r.unknown_name)}</td>
+      <td>${mkEmail(r.email)}</td>
+      <td>${mkLink(r.whatsapp, "WhatsApp")}</td>
+      <td>${mkLink(r.telegram, "Telegram")}</td>
+    </tr>
+  `).join("");
+        wrap.innerHTML = `<table id="resultsTable">${thead}<tbody>${tbody}</tbody></table>`;
+    }
+
+    /* ========= Export / Copy ========= */
+    function toCSV(rows) {
+        const header = ["Status", "Prefix", "Number", "Country", "TrueCaller Name", "Carrier", "Unknown Name", "Email", "WhatsApp", "Telegram"];
+        const esc = v => `"${(v || "").toString().replaceAll(`"`, `""`)}"`;
+        const lines = [header.map(esc).join(",")];
+        rows.forEach(r => {
+            lines.push([r.status, r.prefix, r.number, r.country, r.truecaller_name, r.carrier, r.unknown_name, r.email, r.whatsapp, r.telegram].map(esc).join(","));
+        });
+        return lines.join("\r\n");
+    }
+
+    function rowsToAOA(rows) {
+        const header = ["#", "Status", "Prefix", "Number", "Country", "TrueCaller Name", "Carrier", "Unknown Name", "Email", "WhatsApp", "Telegram"];
+        const aoa = [header];
+        rows.forEach((r, i) => {
+            aoa.push([
+                i + 1, r.status, r.prefix, r.number, r.country, r.truecaller_name, r.carrier, r.unknown_name, r.email, r.whatsapp, r.telegram
+            ]);
+        });
+        return aoa;
+    }
+
+    function exportExcel(rows) {
+        const aoa = rowsToAOA(rows);
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+        ws['!rtl'] = true; // תמיכה ב-RTL לגיליון
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "תוצאות");
+        XLSX.writeFile(wb, "results.xlsx"); // Unicode-friendly
+    }
+
+    function copyTableToClipboard(rows) {
+        // ננסה קודם HTML (הדבקה לאקסל כשולחן), ואם לא זמין – TSV
+        const header = ["#", "Status", "Prefix", "Number", "Country", "TrueCaller Name", "Carrier", "Unknown Name", "Email", "WhatsApp", "Telegram"];
+        const escHtml = s => (s ?? "").toString()
+            .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+        const htmlRows = rows.map((r, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${escHtml(r.status)}</td>
+      <td>${escHtml(r.prefix)}</td>
+      <td>${escHtml(r.number)}</td>
+      <td>${escHtml(r.country)}</td>
+      <td>${escHtml(r.truecaller_name)}</td>
+      <td>${escHtml(r.carrier)}</td>
+      <td>${escHtml(r.unknown_name)}</td>
+      <td>${escHtml(r.email)}</td>
+      <td>${escHtml(r.whatsapp)}</td>
+      <td>${escHtml(r.telegram)}</td>
+    </tr>`).join("");
+        const htmlTable = `
+    <table dir="rtl" border="1">
+      <thead><tr>${header.map(h => `<th>${escHtml(h)}</th>`).join("")}</tr></thead>
+      <tbody>${htmlRows}</tbody>
+    </table>`;
+
+        const tsvEsc = v => (v ?? "").toString().replaceAll("\t", " ").replaceAll("\r", " ").replaceAll("\n", " ");
+        const tsv = [header.join("\t")].concat(
+            rows.map((r, i) => [i + 1, r.status, r.prefix, r.number, r.country, r.truecaller_name, r.carrier, r.unknown_name, r.email, r.whatsapp, r.telegram]
+                .map(tsvEsc).join("\t"))
+        ).join("\n");
+
+        const tryHTML = async () => {
+            if (navigator.clipboard && window.ClipboardItem) {
+                const blobHtml = new Blob([`<meta charset="utf-8">${htmlTable}`], {type: "text/html"});
+                const blobText = new Blob([tsv], {type: "text/plain"});
+                await navigator.clipboard.write([new ClipboardItem({
+                    "text/html": blobHtml,
+                    "text/plain": blobText
+                })]);
+                return true;
+            }
+            return false;
+        };
+
+        tryHTML().then(ok => {
+            if (!ok) {
+                // נפילה חכמה לטקסט
+                const ta = document.createElement("textarea");
+                ta.value = tsv;
+                document.body.appendChild(ta);
+                ta.select();
+                ta.setSelectionRange(0, ta.value.length);
+                document.execCommand("copy");
+                ta.remove();
+            }
+            showToast({title: "הועתק", message: "הטבלה הועתקה ללוח. ניתן להדביק ישירות באקסל."});
+        }).catch(() => {
+            showToast({title: "שגיאה", message: "לא הצלחנו להעתיק ל־Clipboard."});
+        });
+    }
+
+    /* ========= שרת ========= */
+    window.__rawBatch = [];
+    window.__rows = [];
+
+    function toggleResultsActions() {
+        const hasRows = (window.__rows || []).length > 0;
+        el("btnCopyTable").style.display = hasRows ? "inline-block" : "none";
+        el("btnExportExcel").style.display = hasRows ? "inline-block" : "none";
+        el("btnClearResults").style.display = hasRows ? "inline-block" : "none";
+    }
+
+    function toggleRetryButton() {
+        const btn = el("btnRetryFailed");
+        const errs = (window.__rawBatch || []).some(x => x.status === "error");
+        btn.style.display = errs ? "inline-block" : "none";
+    }
+
+    async function runLookup(listRaw) {
+        const base = el("apiBase").value.trim();
+        const delayMs = parseInt(el("delayMs").value || "1", 10);
+        const windowSec = parseFloat(el("windowSec").value || "1");
+        const resultsArea = el("resultsArea");
+
+        // לפני שליחה: דדופ + טוסט
+        dedupeByIntlKeyToast();
+
+        const toSend = listRaw
+            .map(s => s.trim())
+            .filter(Boolean)
+            .map(normalizeForSend);
+
+        if (!toSend.length) {
+            openModal({title: "אין נתונים", message: "לא הוזנו מספרים לשליחה."});
+            return;
+        }
+
+        resultsArea.innerHTML = `<div class="muted">שולח ${toSend.length} בקשות... אנא המתן</div>`;
+        try {
+            const res = await fetch(`${base}/ask-batch`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({messages: toSend, delay_ms: delayMs, window_sec: windowSec})
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                resultsArea.innerHTML = `<div class="muted">שגיאה: ${data.detail || "unknown"}</div>`;
+                return;
+            }
+
+            window.__rawBatch = data.results || [];
+            window.__rows = rowsFromBatch(window.__rawBatch);
+            renderTable(window.__rows);
+            toggleRetryButton();
+            toggleResultsActions();
+
+            const invalids = window.__rawBatch.filter(x => x.status === "invalid");
+            if (invalids.length) {
+                showToast({title: "התרעה", message: `נמצאו ${invalids.length} רשומות לא תקינות—לא נשלחו.`});
+            }
+        } catch (e) {
+            resultsArea.innerHTML = `<div class="muted">שגיאת רשת: ${e}</div>`;
+        }
+    }
+
+    el("btnRun").addEventListener("click", () => {
+        runLookup([...numbersOrder]);
+    });
+
+    el("btnRetryFailed").addEventListener("click", () => {
+        const failed = (window.__rawBatch || []).filter(x => x.status === "error");
+        if (!failed.length) {
+            showToast({title: "אין נכשלים", message: "אין פריטים לשליחה מחודשת."});
+            toggleRetryButton();
+            return;
+        }
+        runLookup(failed.map(x => x.query));
+    });
+
+    el("btnClearResults").addEventListener("click", () => {
+        window.__rawBatch = [];
+        window.__rows = [];
+        el("resultsArea").innerHTML = "";
+        toggleResultsActions();   // הסתרת כפתורי תוצאות
+        toggleRetryButton();      // הסתרת "שלח שוב נכשלים" אם צריך
+        showToast({title: "נוקה", message: "התוצאות נמחקו."});
+    });
+
+
+    el("btnExportExcel").addEventListener("click", () => {
+        const rows = window.__rows || [];
+        if (!rows.length) {
+            showToast({title: "אין נתונים", message: "אין נתונים לייצוא."});
+            return;
+        }
+        exportExcel(rows); // Unicode + RTL
+    });
+
+    el("btnCopyTable").addEventListener("click", () => {
+        const rows = window.__rows || [];
+        if (!rows.length) {
+            showToast({title: "אין נתונים", message: "אין טבלה להעתיק."});
+            return;
+        }
+        copyTableToClipboard(rows);
+    });
+
+    /* ========= אירועים ========= */
+    el("bulkPaste").addEventListener("input", syncStateFromTextarea);
+    el("bulkPaste").addEventListener("blur", dedupeByIntlKeyToast);
+
+    el("btnAdd").addEventListener("click", () => {
+        const v = el("singleNum").value.trim();
+        if (!v) return;
+        const toks = splitTokens(v);
+        const {uniquesRaw, dupKeys, invalid} = analyzeCandidates(toks);
+        let changed = false;
+        for (const raw of uniquesRaw) {
+            if (addNumber(raw)) changed = true;
+        }
+        el("singleNum").value = "";
+        if (changed) {
+            syncTextareaFromState();
+            renderChips();
+        }
+        if (invalid.length) updateLiveReport(invalid);
+        toastDupKeys(dupKeys, "כפילויות בהוספה ידנית");
+    });
+
+    el("btnClearAll").addEventListener("click", () => {
+        resetNumbers();
+        syncTextareaFromState();
+        renderChips();
+        updateLiveReport([]);
+        window.__rawBatch = [];
+        window.__rows = [];
+        el("resultsArea").innerHTML = "";
+        toggleRetryButton();
+        toggleResultsActions();
+    });
+
+    /* ========= ייבוא ========= */
+    document.getElementById("btnDownloadSample").addEventListener("click", () => {
+        const sample = [
+            "0525993123",
+            "+972545551234",
+            "03-7771234",
+            "054-6430023; 0501112233",
+            "972525991234"
+        ].join("\r\n");
+        const blob = new Blob([sample], {type: "text/csv;charset=utf-8"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "sample_numbers.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    });
+
+    document.getElementById("fileInput").addEventListener("change", async (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        const report = el("importReport");
+        report.textContent = "מעבד קובץ...";
+        try {
+            const buf = await f.arrayBuffer();
+            let candidates = [];
+            if (f.name.toLowerCase().endsWith(".csv")) {
+                const text = new TextDecoder("utf-8").decode(new Uint8Array(buf));
+                candidates = splitTokens(text);
+            } else {
+                const wb = XLSX.read(buf, {type: "array"});
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const json = XLSX.utils.sheet_to_json(ws, {header: 1, raw: false});
+                for (const row of json) {
+                    for (const cell of row) {
+                        if (!cell) continue;
+                        splitTokens(String(cell)).forEach(c => candidates.push(c));
+                    }
+                }
+            }
+
+            const existingKeys = new Set((numbersOrder || []).map(raw => normalizeForSend(raw)));
+            const seenInThisFile = new Set();
+            const dupKeys = new Set();
+            const uniquesRaw = [];
+            const invalid = [];
+
+            for (const raw0 of candidates.map(s => s.trim()).filter(Boolean)) {
+                if (!looksLikePhoneRaw(raw0)) {
+                    invalid.push(raw0);
+                    continue;
+                }
+                const key = normalizeForSend(raw0);
+                if (existingKeys.has(key) || seenInThisFile.has(key)) {
+                    dupKeys.add(key);
+                    continue;
+                }
+                uniquesRaw.push(raw0);
+                seenInThisFile.add(key);
+            }
+
+            let added = 0;
+            for (const raw of uniquesRaw) {
+                if (addNumber(raw)) added++;
+            }
+
+            syncTextareaFromState();
+            renderChips();
+
+            toastDupKeys(dupKeys, "כפילויות בייבוא");
+
+            report.innerHTML = `נטענו <b>${added}</b> מספרים תקינים.` +
+                (invalid.length ? ` דולגו <b>${invalid.length}</b> לא תקינים (למשל: ${invalid.slice(0, 3).join(", ")}).` : "");
+        } catch (err) {
+            report.textContent = "שגיאה בקריאת הקובץ: " + err;
+        } finally {
+            e.target.value = "";
+        }
+    });
+
+    /* ========= בריאות ========= */
+    async function health() {
+        const base = el("apiBase").value.trim();
+        el("health").textContent = "בודק...";
+        try {
+            const res = await fetch(`${base}/health`);
+            const data = await res.json();
+            el("health").textContent = data.ok ? `מחובר כ־@${data.me || "me"}` : "שגיאה";
+        } catch {
+            el("health").textContent = "לא מחובר";
+        }
+    }
+
+    el("btnHealth").addEventListener("click", health);
+
+    /* ========= Init ========= */
+    renderChips();
+    health();
+    toggleRetryButton();
+    toggleResultsActions();
+</script>
+</body>
+</html>
