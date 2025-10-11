@@ -22,18 +22,26 @@ API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH", "")
 PHONE = os.getenv("PHONE", "")
 TARGET_BOT = os.getenv("TARGET_BOT", "@TrueCaller1Bot")
+# אם יש SESSION_STRING – נשתמש בו; אחרת נשתמש בשם קובץ session מקומי (כמו קודם)
+SESSION_STRING = os.getenv("SESSION_STRING", "").strip()
 SESSION = os.getenv("SESSION_NAME", "tc_user_session")
-STRING_SESSION = os.getenv("STRING_SESSION", "").strip()
 FRONTEND_API_BASE = os.getenv("FRONTEND_API_BASE", "").strip()
-DEV_PASSWORD = os.getenv("DEV_PASSWORD", "")  # ← סיסמת מצב מפתח
+DEV_PASSWORD = os.getenv("DEV_PASSWORD", "")
 SECRET_KEY = os.getenv("SECRET_KEY", "")
 DEV_COOKIE_NAME = "dev_token"
 DEV_TOKEN_TTL = 60 * 60 * 8  # 8 שעות
 
-if STRING_SESSION:
-    client = TelegramClient(StringSession(STRING_SESSION), API_ID, API_HASH)
+if not (API_ID and API_HASH and TARGET_BOT):
+    raise RuntimeError("חסרים API_ID / API_HASH / TARGET_BOT בקובץ .env או משתני סביבה")
+
+# === יצירת הלקוח ===
+if SESSION_STRING:
+    # שימוש במחרוזת session מה-ENV (מומלץ ל-Render)
+    client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 else:
+    # שימוש בקובץ session מקומי (מומלץ רק לפיתוח מקומי)
     client = TelegramClient(SESSION, API_ID, API_HASH)
+
 
 def _sign(data: bytes) -> str:
     if not SECRET_KEY:
