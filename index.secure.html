@@ -1,6 +1,7 @@
 <!doctype html>
 <html dir="rtl" lang="he">
 <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:8002 http://127.0.0.1:8002; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
     <meta charset="utf-8"/>
     <meta content="width=device-width,initial-scale=1" name="viewport"/>
     <title>איתור מספרי טלפון</title>
@@ -115,7 +116,7 @@
     <div class="panel dev-only" id="devApiPanel" style="display:none">
         <div class="row">
             <label>API Base</label>
-            <input id="apiBase" style="min-width:280px" value="http://localhost:8004"/>
+            <input id="apiBase" style="min-width:280px" value="http://localhost:8002"/>
             <button id="btnHealth">בדיקת חיבור</button>
             <span class="muted" id="health"></span>
         </div>
@@ -300,9 +301,21 @@
 
     /* ========= רינדור ========= */
     function renderChips(){
-      const wrap = el("chips");
-      wrap.innerHTML = "";
-      if (numbersOrder.length === 0){ wrap.innerHTML = `<span class="muted">לא הוזנו מספרים עדיין.</span>`; return; }
+  const wrap = el("chips");
+  wrap.innerHTML = "";
+  if (numbersOrder.length === 0){ wrap.textContent = "לא הוזנו מספרים עדיין."; return; }
+  numbersOrder.forEach(n=>{
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    const span = document.createElement("span");
+    span.textContent = n;
+    const rm = document.createElement("span");
+    rm.className = "remove"; rm.title="הסר"; rm.textContent = "✕";
+    rm.onclick = ()=>{ removeNumber(n); syncTextareaFromState(); renderChips(); updateLiveReport(); };
+    chip.appendChild(span); chip.appendChild(rm);
+    wrap.appendChild(chip);
+  });
+}
       numbersOrder.forEach(n=>{
         const chip = document.createElement("div");
         chip.className = "chip";
@@ -316,8 +329,11 @@
 
     /* ========= דו"ח לא תקינים ========= */
     function updateLiveReport(invalidList = []){
-      const r = el("liveReport");
-      if (!invalidList || invalidList.length === 0){ r.textContent = ""; return; }
+  const r = el("liveReport");
+  if (!Array.isArray(invalidList) || invalidList.length === 0){ r.textContent = ""; return; }
+  const example = invalidList.slice(0,3).join(", ");
+  r.textContent = `התעלמנו מ־${invalidList.length} ערכים לא תקינים (דוגמה: ${example}).`;
+}
       r.innerHTML = `התעלמנו מ־<b>${invalidList.length}</b> ערכים לא תקינים (דוגמה: ${invalidList.slice(0, 3).join(", ")}).`;
     }
 
@@ -610,7 +626,7 @@
         const invalids = window.__rawBatch.filter(x => x.status === "invalid");
         if (invalids.length){ showToast({title:"התרעה", message:`נמצאו ${invalids.length} רשומות לא תקינות—לא נשלחו.`}); }
       }catch(e){
-        resultsArea.innerHTML = `<div class="muted">שגיאת רשת: ${e}</div>`;
+        resultsArea.textContent = `שגיאת רשת: ${String(e).slice(0,200)}`;
       }
     }
 

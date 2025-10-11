@@ -1,20 +1,12 @@
-import asyncio
-import base64
-import contextlib
-import hashlib
-import hmac
-import os
-import re
-import time
+import os, asyncio, re, contextlib
+import time, hmac, hashlib, base64
 from typing import List, Dict, Any
-
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon import errors as tg_errors
-from telethon.sessions import StringSession
 
 load_dotenv()
 
@@ -23,17 +15,13 @@ API_HASH = os.getenv("API_HASH", "")
 PHONE = os.getenv("PHONE", "")
 TARGET_BOT = os.getenv("TARGET_BOT", "@TrueCaller1Bot")
 SESSION = os.getenv("SESSION_NAME", "tc_user_session")
-STRING_SESSION = os.getenv("STRING_SESSION", "").strip()
 FRONTEND_API_BASE = os.getenv("FRONTEND_API_BASE", "").strip()
 DEV_PASSWORD = os.getenv("DEV_PASSWORD", "")  # ← סיסמת מצב מפתח
 SECRET_KEY = os.getenv("SECRET_KEY", "")
 DEV_COOKIE_NAME = "dev_token"
 DEV_TOKEN_TTL = 60 * 60 * 8  # 8 שעות
 
-if STRING_SESSION:
-    client = TelegramClient(StringSession(STRING_SESSION), API_ID, API_HASH)
-else:
-    client = TelegramClient(SESSION, API_ID, API_HASH)
+
 
 def _sign(data: bytes) -> str:
     if not SECRET_KEY:
@@ -62,36 +50,83 @@ def verify_dev_token(token: str, user_agent: str = "") -> bool:
         return False
 
 
+
 if not (API_ID and API_HASH and PHONE and TARGET_BOT):
     raise RuntimeError("חסרים API_ID / API_HASH / PHONE / TARGET_BOT בקובץ .env")
 
 app = FastAPI(title="TrueCaller Relay API")
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "").rstrip("/")
+ALLOWED_ORIGINS = [FRONTEND_ORIGIN] if FRONTEND_ORIGIN else []
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # בפרודקשן – הגבל לדומיין ה-Frontend
+    allow_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS else ["http://localhost:8002","http://127.0.0.1:8002"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET","POST"],
+    allow_headers=["Content-Type","Authorization","X-CSRF-Token"],
 )
 
-# client = TelegramClient(SESSION, API_ID, API_HASH)
+# --------- Security headers middleware ---------
+from starlette.middleware.base import BaseHTTPMiddleware
 
+@app.middleware("http")
+async def security_headers_mw(request: Request, call_next):
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "no-referrer")
+    resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    resp.headers.setdefault("Content-Security-Policy", "default-src 'none'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';")
+    return resp
+
+client = TelegramClient(SESSION, API_ID, API_HASH)
+# --------- Security helpers ---------
+SAFE_ORIGINS = set([o for o in (os.getenv('FRONTEND_ORIGIN','').rstrip('/'),) if o])
+_FAILED_BUCKETS: Dict[str, Dict[str,int]] = {}
+API_KEY = os.getenv('API_KEY', '')
+
+def _is_safe_origin(request: Request) -> bool:
+    origin = (request.headers.get('origin') or '').rstrip('/')
+    referer = (request.headers.get('referer') or '').rstrip('/')
+    if SAFE_ORIGINS:
+        for src in filter(None, [origin, referer]):
+            if any(src.startswith(a) for a in SAFE_ORIGINS):
+                return True
+        return False
+    return True
+
+def _rate_limit(request: Request, max_per_min: int = 60):
+    ip = request.client.host if request.client else '?'
+    now_min = int(time.time() // 60)
+    bucket = _FAILED_BUCKETS.get(ip, {'min': now_min, 'count': 0})
+    if bucket['min'] != now_min:
+        bucket = {'min': now_min, 'count': 0}
+    bucket['count'] += 1
+    _FAILED_BUCKETS[ip] = bucket
+    if bucket['count'] > max_per_min:
+        raise HTTPException(429, 'Too Many Requests')
+
+def _require_api_key(request: Request):
+    if API_KEY:
+        auth = request.headers.get('authorization', '')
+        if not auth.lower().startswith('bearer '):
+            raise HTTPException(401, 'Missing API key')
+        provided = auth.split(' ',1)[1].strip()
+        if not hmac.compare_digest(provided, API_KEY):
+            raise HTTPException(403, 'Bad API key')
 
 # --------- Models ---------
 class AskBody(BaseModel):
     text: str = Field(..., min_length=1)
     window_sec: float = Field(default=1.0, ge=0, le=15)  # ברירת מחדל 1
 
-
 class BatchBody(BaseModel):
     messages: List[str] = Field(..., min_items=1)
     delay_ms: int = Field(default=500, ge=0, le=10000)
     window_sec: float = Field(default=1.0, ge=0, le=15)  # ברירת מחדל 1
 
-
 class DevAuthBody(BaseModel):
     password: str
-
 
 # --------- Helpers ---------
 def normalize_msisdn(num: str) -> str:
@@ -105,15 +140,14 @@ def normalize_msisdn(num: str) -> str:
     if s.startswith("972"):  return "+" + s
     if s.startswith("+"):    return s
 
-    if re.fullmatch(r"05\d{8}", s):  # מובייל IL
+    if re.fullmatch(r"05\d{8}", s):                 # מובייל IL
         return "+972" + s[1:]
-    if re.fullmatch(r"0\d{8,9}", s):  # קווי IL
+    if re.fullmatch(r"0\d{8,9}", s):                # קווי IL
         return "+972" + s[1:]
     if re.fullmatch(r"\d{9}", s) and s.startswith("5"):
         return "+972" + s
 
     return s
-
 
 def looks_like_phone(num: str) -> bool:
     s = normalize_msisdn(num)
@@ -121,7 +155,6 @@ def looks_like_phone(num: str) -> bool:
         re.fullmatch(r"\+\d{9,15}", s) or
         re.fullmatch(r"972\d{8,9}", s)
     )
-
 
 # --------- App meta ---------
 @app.get("/config")
@@ -133,15 +166,17 @@ async def config(request: Request):
     api_base = FRONTEND_API_BASE or origin or ""
     return {"ok": True, "api_base": api_base}
 
-
 @app.post("/dev-auth")
-async def dev_auth(body: DevAuthBody):
+async def dev_auth(body: DevAuthBody, request: Request):
     """
     אימות מצב מפתח מול סיסמה שנקבעת בקובץ .env (DEV_PASSWORD).
     """
     if not DEV_PASSWORD:
         return {"ok": False, "error": "DEV_PASSWORD לא הוגדר בשרת"}
-    return {"ok": (body.password == DEV_PASSWORD)}
+    _rate_limit(request, max_per_min=30)
+    if not _is_safe_origin(request):
+        raise HTTPException(403, "Bad origin")
+    return {"ok": hmac.compare_digest(body.password, DEV_PASSWORD)}
 
 
 @app.post("/dev-auth/login")
@@ -158,26 +193,23 @@ async def dev_login(body: DevAuthBody, request: Request, response: Response):
     response.set_cookie(
         DEV_COOKIE_NAME, token,
         max_age=DEV_TOKEN_TTL,
-        httponly=True,  # חשוב! מגן מגישה ע"י JS
-        samesite="strict",  # מונע שליחה מצד-שלישי (ב-localhost זה עדיין same-site)
-        secure=secure_flag,  # ב-HTTPS חובה True
+        httponly=True,           # חשוב! מגן מגישה ע"י JS
+        samesite="strict",       # מונע שליחה מצד-שלישי (ב-localhost זה עדיין same-site)
+        secure=secure_flag,      # ב-HTTPS חובה True
         path="/"
     )
     return {"ok": True}
 
-
 @app.get("/dev-auth/status")
 async def dev_status(request: Request):
     token = request.cookies.get(DEV_COOKIE_NAME)
-    ok = bool(token and verify_dev_token(token, request.headers.get("user-agent", "")))
+    ok = bool(token and verify_dev_token(token, request.headers.get("user-agent","")))
     return {"ok": ok}
-
 
 @app.post("/dev-auth/logout")
 async def dev_logout(response: Response):
     response.delete_cookie(DEV_COOKIE_NAME, path="/")
     return {"ok": True}
-
 
 @app.on_event("startup")
 async def startup():
@@ -185,14 +217,13 @@ async def startup():
     if not await client.is_user_authorized():
         # חד-פעמי: צור session ע"י client.start(PHONE)
         raise RuntimeError(
-            "❌ Session לא מאומת. אם אתה מריץ בענן, ודא שהגדרת STRING_SESSION תקין במשתני הסביבה."
+            "Session לא מאומת. בצע פעם אחת התחברות כדי ליצור קובץ .session: "
+            "with TelegramClient(SESSION, API_ID, API_HASH) as c: c.start(PHONE)"
         )
-
 
 @app.on_event("shutdown")
 async def shutdown():
     await client.disconnect()
-
 
 # --------- Core logic ---------
 async def _refresh_first_and_collect(entity, first_msg_id: int, window_sec: float) -> List[str]:
@@ -228,7 +259,6 @@ async def _refresh_first_and_collect(entity, first_msg_id: int, window_sec: floa
             cleaned.append(r)
     return cleaned
 
-
 async def ask_truecaller_once(text: str, window_sec: float) -> List[str]:
     entity = await client.get_entity(TARGET_BOT)
 
@@ -254,20 +284,21 @@ async def ask_truecaller_once(text: str, window_sec: float) -> List[str]:
         replies = [((first.text or "").strip()) if first else ""]
     return replies
 
-
 # --------- Endpoints ---------
 @app.post("/ask")
-async def ask(body: AskBody):
+async def ask(body: AskBody, request: Request):
     try:
         text = normalize_msisdn(body.text)
+        if not looks_like_phone(text):
+            return {"ok": False, "query": body.text, "status": "invalid", "error": "מספר לא תקין"}
+        _require_api_key(request)
         replies = await ask_truecaller_once(text, body.window_sec)
         return {"ok": True, "query": text, "replies": replies, "status": "ok"}
-    except Exception as e:
-        return {"ok": False, "query": body.text, "error": str(e), "status": "error"}
-
+    except Exception:
+        return {"ok": False, "query": body.text, "error": "שגיאה פנימית", "status": "error"}
 
 @app.post("/ask-batch")
-async def ask_batch(body: BatchBody):
+async def ask_batch(body: BatchBody, request: Request):
     results: List[Dict[str, Any]] = []
     for raw in body.messages:
         q = normalize_msisdn(raw.strip())
@@ -281,13 +312,16 @@ async def ask_batch(body: BatchBody):
             replies = await ask_truecaller_once(q, body.window_sec)
             results.append({"query": q, "replies": replies, "status": "ok"})
         except Exception as e:
-            results.append({"query": q, "status": "error", "error": str(e)})
+            results.append({"query": q, "status": "error", "error": "שגיאה פנימית"})
         if body.delay_ms:
             await asyncio.sleep(body.delay_ms / 1000.0)
     return {"ok": True, "count": len(results), "results": results}
 
-
 @app.get("/health")
-async def health():
-    me = await client.get_me()
-    return {"ok": True, "me": getattr(me, "username", None)}
+async def health(request: Request):
+    token = request.cookies.get(DEV_COOKIE_NAME)
+    show = bool(token and verify_dev_token(token, request.headers.get("user-agent","")))
+    if show:
+        me = await client.get_me()
+        return {"ok": True, "me": getattr(me, "username", None)}
+    return {"ok": True}
